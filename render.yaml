@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: banat-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: FB_COOKIES
+        sync: false
+      - key: BANAT_ADMIN_IDS
+        sync: false

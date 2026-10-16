@@ -13,6 +13,7 @@
  *   !banat toggle
  *   !banat status
  *   !banat help
+ *   !banat patayan on|off  savage roast mode
  *
  * GC COMMANDS (GC admins, or IDs listed in BANAT_ADMIN_IDS; "*" = everyone):
  *   !banat lockname [name]     lock the GC name (empty = lock current name)
@@ -37,6 +38,7 @@ const { getTriggerReply, getBanatConversationReply } = require("./triggers");
 const { sendBanatReplyWithTyping } = require("./banat-human");
 const { classifyBanatTarget, setBanatConversationMode, isBanatConversationModeActive } = require("./banat-targeting");
 const gc = require("./gc-controls");
+const { setPatayan, isPatayan, listPatayan } = require("./banat-patayan");
 
 // Dashboard password (used if no env var is set on the host).
 // WARNING: anyone who can read this file can control the bot. Keep the repo PRIVATE.
@@ -351,8 +353,19 @@ function handleBanatCommand(api, event, body) {
     return true;
   }
 
+  if (sub === "patayan") {
+    const arg = (parts[2] || "toggle").toLowerCase();
+    const next = arg === "on" ? true : arg === "off" ? false : arg === "status" ? isPatayan(threadID) : !isPatayan(threadID);
+    if (arg !== "status") {
+      setPatayan(threadID, next);
+      if (next) { setBanatConversationMode(threadID, true, event.senderID); activeThreads.add(threadID); }
+    }
+    sendCommandReply(api, event, arg === "status" ? (next ? "patayan: ON 💀" : "patayan: OFF") : next ? "PATAYAN MODE ON 💀 walang awa na 'to" : "patayan off. tahimik na");
+    return true;
+  }
+
   if (sub === "help") {
-    sendCommandReply(api, event, "!banat on/off/toggle/status · GC: lockname [name] · unlockname · nickall <nick> · nickall! <nick> · nickclear · nick @user <nick> · nicklock · nickunlock · gc");
+    sendCommandReply(api, event, "!banat on/off/toggle/status · GC: lockname [name] · unlockname · nickall <nick> · nickall! <nick> · nickclear · nick @user <nick> · nicklock · nickunlock · gc · patayan on/off");
     return true;
   }
 
@@ -755,12 +768,21 @@ try {
     setPaused: (paused) => { botPaused = Boolean(paused); },
     getPaused: () => botPaused,
     getEvents: () => events,
-    gcState: () => gc.getState(),
+    gcState: () => Object.assign(gc.getState(), { patayan: listPatayan() }),
     gcThreads: async () => {
       if (!currentApi) throw new Error("Messenger is not connected");
       return gc.listThreads(currentApi);
     },
     gcAction: async (action, params) => {
+      if (action === "patayan-on" || action === "patayan-off") {
+        const id = String(params.threadID || "").trim();
+        if (!id) throw new Error("threadID is required");
+        const on = action === "patayan-on";
+        setPatayan(id, on);
+        if (on) { setBanatConversationMode(id, true, "dashboard"); activeThreads.add(id); }
+        pushEvent("gc", `patayan ${on ? "ON" : "OFF"} ${id}`);
+        return { message: on ? "PATAYAN MODE ON 💀" : "Patayan off" };
+      }
       if (!currentApi) throw new Error("Messenger is not connected");
       const r = await gc.run(currentApi, action, params);
       if (r.background) {
